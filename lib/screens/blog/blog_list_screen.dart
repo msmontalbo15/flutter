@@ -5,6 +5,7 @@ import '../../../services/blog_service.dart';
 import '../../../services/profile_service.dart';
 import '../../../utils/date_utils.dart';
 import '../../../widgets/gradient_background.dart';
+import '../../../widgets/image_carousel.dart';
 import 'blog_detail_screen.dart';
 import 'blog_form_screen.dart';
 import '../profile/profile_screen.dart';
@@ -374,13 +375,11 @@ class _BlogCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (blog.imageUrl != null)
-              Image.network(
-                blog.imageUrl!,
+            if (blog.imageUrls.isNotEmpty)
+              ImageCarousel(
+                imageUrls: blog.imageUrls,
                 height: 180,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                errorBuilder: (_, __, _) => const SizedBox.shrink(),
+                borderRadius: BorderRadius.zero,
               ),
             Padding(
               padding: const EdgeInsets.all(16),

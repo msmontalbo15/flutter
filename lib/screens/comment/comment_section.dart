@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/comment.dart';
 import '../../../services/comment_service.dart';
 import '../../../utils/date_utils.dart';
+import '../../../widgets/image_carousel.dart';
 
 class CommentSection extends StatefulWidget {
   final String blogId;
@@ -21,7 +22,7 @@ class _CommentSectionState extends State<CommentSection> {
   bool _loading = true;
   bool _posting = false;
   String? _error;
-  Uint8List? _imageBytes;
+  List<Uint8List> _newImages = [];
 
   String get _currentUserId =>
       Supabase.instance.client.auth.currentUser?.id ?? '';
@@ -39,42 +40,49 @@ class _CommentSectionState extends State<CommentSection> {
     });
     try {
       final data = await _service.fetchComments(widget.blogId);
-      if (mounted)
+      if (mounted) {
         setState(() {
           _comments = data;
           _loading = false;
         });
+      }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _error = e.toString();
           _loading = false;
         });
+      }
     }
   }
 
-  Future<void> _pickImage() async {
-    final img = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 70,
-    );
-    if (img == null) return;
-    final bytes = await img.readAsBytes();
-    setState(() => _imageBytes = bytes);
+  Future<void> _pickImages() async {
+    final imgs = await ImagePicker().pickMultiImage(imageQuality: 70);
+    if (imgs.isEmpty) return;
+
+    final bytes = <Uint8List>[];
+    for (var img in imgs) {
+      bytes.add(await img.readAsBytes());
+    }
+    setState(() => _newImages.addAll(bytes));
+  }
+
+  void _removeImage(int index) {
+    setState(() => _newImages.removeAt(index));
   }
 
   Future<void> _post() async {
     final text = _textCtrl.text.trim();
-    if (text.isEmpty && _imageBytes == null) return;
+    if (text.isEmpty && _newImages.isEmpty) return;
     setState(() => _posting = true);
     try {
       await _service.addComment(
         blogId: widget.blogId,
         content: text,
-        imageBytes: _imageBytes,
+        imagesBytes: _newImages.isNotEmpty ? _newImages : null,
       );
       _textCtrl.clear();
-      setState(() => _imageBytes = null);
+      setState(() => _newImages = []);
       await _loadComments();
     } catch (e) {
       if (mounted) {
@@ -146,8 +154,6 @@ class _CommentSectionState extends State<CommentSection> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -159,39 +165,54 @@ class _CommentSectionState extends State<CommentSection> {
           child: Padding(
             padding: const EdgeInsets.all(12),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (_imageBytes != null)
-                  Stack(
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.memory(
-                          _imageBytes!,
-                          height: 120,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: CircleAvatar(
-                          radius: 12,
-                          backgroundColor: Colors.black54,
-                          child: IconButton(
-                            icon: const Icon(
-                              Icons.close,
-                              size: 12,
-                              color: Colors.white,
+                // Image grid preview
+                if (_newImages.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _newImages
+                          .asMap()
+                          .entries
+                          .map(
+                            (e) => Stack(
+                              children: [
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.memory(
+                                    e.value,
+                                    width: 80,
+                                    height: 80,
+                                    fit: BoxFit.cover,
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 2,
+                                  right: 2,
+                                  child: GestureDetector(
+                                    onTap: () => _removeImage(e.key),
+                                    child: CircleAvatar(
+                                      radius: 10,
+                                      backgroundColor: Colors.black54,
+                                      child: const Icon(
+                                        Icons.close,
+                                        size: 12,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            padding: EdgeInsets.zero,
-                            onPressed: () => setState(() => _imageBytes = null),
-                          ),
-                        ),
-                      ),
-                    ],
+                          )
+                          .toList(),
+                    ),
                   ),
-                if (_imageBytes != null) const SizedBox(height: 8),
+
+                // Input row
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -212,8 +233,8 @@ class _CommentSectionState extends State<CommentSection> {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.image_outlined),
-                          onPressed: _pickImage,
-                          tooltip: 'Add image',
+                          onPressed: _pickImages,
+                          tooltip: 'Add images',
                         ),
                         IconButton(
                           icon: _posting
@@ -307,43 +328,46 @@ class _EditCommentSheet extends StatefulWidget {
 
 class _EditCommentSheetState extends State<_EditCommentSheet> {
   late final TextEditingController _ctrl;
-  Uint8List? _newImageBytes;
-  String? _existingImageUrl;
-  bool _removeImage = false;
+  List<Uint8List> _newImages = [];
+  List<String> _existingImageUrls = [];
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
     _ctrl = TextEditingController(text: widget.comment.content);
-    _existingImageUrl = widget.comment.imageUrl;
+    _existingImageUrls = List.from(widget.comment.imageUrls);
   }
 
-  Future<void> _pickImage() async {
-    final img = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 70,
-    );
-    if (img == null) return;
-    final bytes = await img.readAsBytes();
-    setState(() {
-      _newImageBytes = bytes;
-      _removeImage = false;
-      _existingImageUrl = null;
-    });
+  Future<void> _pickImages() async {
+    final imgs = await ImagePicker().pickMultiImage(imageQuality: 70);
+    if (imgs.isEmpty) return;
+
+    final bytes = <Uint8List>[];
+    for (var img in imgs) {
+      bytes.add(await img.readAsBytes());
+    }
+    setState(() => _newImages.addAll(bytes));
   }
 
-  void _clearImage() {
+  void _removeNewImage(int index) {
+    setState(() => _newImages.removeAt(index));
+  }
+
+  void _removeExistingImage(int index) {
+    setState(() => _existingImageUrls.removeAt(index));
+  }
+
+  void _clearAllImages() {
     setState(() {
-      _newImageBytes = null;
-      _existingImageUrl = null;
-      _removeImage = true;
+      _newImages = [];
+      _existingImageUrls = [];
     });
   }
 
   Future<void> _save() async {
     final text = _ctrl.text.trim();
-    if (text.isEmpty && _newImageBytes == null && _existingImageUrl == null) {
+    if (text.isEmpty && _newImages.isEmpty && _existingImageUrls.isEmpty) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Comment cannot be empty')));
@@ -355,9 +379,9 @@ class _EditCommentSheetState extends State<_EditCommentSheet> {
       await widget.service.updateComment(
         commentId: widget.comment.id,
         content: text,
-        newImageBytes: _newImageBytes,
-        existingImageUrl: _existingImageUrl,
-        removeImage: _removeImage,
+        newImagesBytes: _newImages.isNotEmpty ? _newImages : null,
+        existingImageUrls: _existingImageUrls,
+        removeAllImages: _existingImageUrls.isEmpty && _newImages.isEmpty,
       );
       widget.onSaved();
       if (mounted) Navigator.pop(context);
@@ -378,8 +402,7 @@ class _EditCommentSheetState extends State<_EditCommentSheet> {
     super.dispose();
   }
 
-  bool get _hasImage =>
-      _newImageBytes != null || (_existingImageUrl != null && !_removeImage);
+  bool get _hasImages => _newImages.isNotEmpty || _existingImageUrls.isNotEmpty;
 
   @override
   Widget build(BuildContext context) {
@@ -392,135 +415,179 @@ class _EditCommentSheetState extends State<_EditCommentSheet> {
         top: 20,
         bottom: MediaQuery.of(context).viewInsets.bottom + 20,
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          // Sheet handle
-          Center(
-            child: Container(
-              width: 40,
-              height: 4,
-              margin: const EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(2),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // Sheet handle
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
             ),
-          ),
 
-          Text(
-            'Edit Comment',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
+            Text(
+              'Edit Comment',
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
+            const SizedBox(height: 16),
 
-          // Image preview
-          if (_hasImage)
-            Stack(
-              children: [
-                ClipRRect(
+            // Image grid
+            if (_hasImages)
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest.withOpacity(
+                    0.5,
+                  ),
                   borderRadius: BorderRadius.circular(8),
-                  child: _newImageBytes != null
-                      ? Image.memory(
-                          _newImageBytes!,
-                          height: 140,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        )
-                      : Image.network(
-                          _existingImageUrl!,
-                          height: 140,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                        ),
                 ),
-                Positioned(
-                  top: 6,
-                  right: 6,
-                  child: CircleAvatar(
-                    radius: 14,
-                    backgroundColor: Colors.black54,
-                    child: IconButton(
-                      icon: const Icon(
-                        Icons.close,
-                        size: 14,
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    // Existing images
+                    ..._existingImageUrls.asMap().entries.map(
+                      (e) => Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              e.value,
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          Positioned(
+                            top: 2,
+                            right: 2,
+                            child: GestureDetector(
+                              onTap: () => _removeExistingImage(e.key),
+                              child: CircleAvatar(
+                                radius: 10,
+                                backgroundColor: Colors.black54,
+                                child: const Icon(
+                                  Icons.close,
+                                  size: 12,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // New images
+                    ..._newImages.asMap().entries.map(
+                      (e) => Stack(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.memory(
+                              e.value,
+                              width: 80,
+                              height: 80,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          Positioned(
+                            top: 2,
+                            right: 2,
+                            child: GestureDetector(
+                              onTap: () => _removeNewImage(e.key),
+                              child: CircleAvatar(
+                                radius: 10,
+                                backgroundColor: Colors.black54,
+                                child: const Icon(
+                                  Icons.close,
+                                  size: 12,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            if (_hasImages) const SizedBox(height: 10),
+
+            // Image action buttons
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _pickImages,
+                  icon: const Icon(Icons.image_outlined, size: 18),
+                  label: Text(_hasImages ? 'Add more' : 'Add images'),
+                ),
+                if (_hasImages) ...[
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: _clearAllImages,
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      size: 18,
+                      color: Colors.red,
+                    ),
+                    label: const Text(
+                      'Remove all',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      side: const BorderSide(color: Colors.red),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Text field
+            TextField(
+              controller: _ctrl,
+              maxLines: 4,
+              minLines: 2,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'Edit your comment...',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Save button
+            FilledButton(
+              onPressed: _saving ? null : _save,
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+              ),
+              child: _saving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
                         color: Colors.white,
                       ),
-                      padding: EdgeInsets.zero,
-                      onPressed: _clearImage,
-                      tooltip: 'Remove image',
-                    ),
-                  ),
-                ),
-              ],
+                    )
+                  : const Text('Save Changes'),
             ),
-
-          if (_hasImage) const SizedBox(height: 10),
-
-          // Image action buttons
-          Row(
-            children: [
-              OutlinedButton.icon(
-                onPressed: _pickImage,
-                icon: const Icon(Icons.image_outlined, size: 18),
-                label: Text(_hasImage ? 'Change image' : 'Add image'),
-              ),
-              if (_hasImage) ...[
-                const SizedBox(width: 8),
-                OutlinedButton.icon(
-                  onPressed: _clearImage,
-                  icon: const Icon(
-                    Icons.hide_image_outlined,
-                    size: 18,
-                    color: Colors.red,
-                  ),
-                  label: const Text(
-                    'Remove image',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    side: const BorderSide(color: Colors.red),
-                  ),
-                ),
-              ],
-            ],
-          ),
-          const SizedBox(height: 12),
-
-          // Text field
-          TextField(
-            controller: _ctrl,
-            maxLines: 4,
-            minLines: 2,
-            autofocus: true,
-            decoration: const InputDecoration(
-              hintText: 'Edit your comment...',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Save button
-          FilledButton(
-            onPressed: _saving ? null : _save,
-            style: FilledButton.styleFrom(
-              minimumSize: const Size.fromHeight(48),
-            ),
-            child: _saving
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
-                : const Text('Save Changes'),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -616,17 +683,12 @@ class _CommentTile extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(comment.content, style: theme.textTheme.bodyMedium),
                   ],
-                  if (comment.imageUrl != null) ...[
+                  if (comment.imageUrls.isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    ClipRRect(
+                    ImageCarousel(
+                      imageUrls: comment.imageUrls,
+                      height: 150,
                       borderRadius: BorderRadius.circular(8),
-                      child: Image.network(
-                        comment.imageUrl!,
-                        height: 150,
-                        width: double.infinity,
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, __, _) => const SizedBox.shrink(),
-                      ),
                     ),
                   ],
                 ],

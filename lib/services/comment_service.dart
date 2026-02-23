@@ -12,53 +12,56 @@ class CommentService {
         .from('comments')
         .select('*, profiles!comments_author_id_fkey(full_name, avatar_url)')
         .eq('blog_id', blogId)
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: true);
 
     return (response as List).map((map) => Comment.fromMap(map)).toList();
   }
 
-  /// Add a comment
+  /// Add a comment with multiple images
   Future<void> addComment({
     required String blogId,
     required String content,
-    Uint8List? imageBytes,
+    List<Uint8List>? imagesBytes,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) throw Exception('Not authenticated');
 
-    String? imageUrl;
-    if (imageBytes != null) {
-      imageUrl = await _uploadImage(imageBytes);
+    List<String> imageUrls = [];
+    if (imagesBytes != null && imagesBytes.isNotEmpty) {
+      for (var imageBytes in imagesBytes) {
+        final url = await _uploadImage(imageBytes);
+        imageUrls.add(url);
+      }
     }
 
     await _client.from('comments').insert({
       'blog_id': blogId,
       'author_id': user.id,
       'content': content,
-      'image_url': imageUrl,
+      'image_urls': imageUrls,
     });
   }
 
-  /// Update a comment
+  /// Update a comment with multiple images
   Future<void> updateComment({
     required String commentId,
     required String content,
-    Uint8List? newImageBytes,
-    String? existingImageUrl,
-    bool removeImage = false,
+    List<Uint8List>? newImagesBytes,
+    List<String>? existingImageUrls,
+    bool removeAllImages = false,
   }) async {
-    String? imageUrl;
-    if (removeImage) {
-      imageUrl = null;
-    } else if (newImageBytes != null) {
-      imageUrl = await _uploadImage(newImageBytes);
-    } else {
-      imageUrl = existingImageUrl;
+    List<String> imageUrls = removeAllImages ? [] : (existingImageUrls ?? []);
+
+    if (newImagesBytes != null && newImagesBytes.isNotEmpty) {
+      for (var imageBytes in newImagesBytes) {
+        final url = await _uploadImage(imageBytes);
+        imageUrls.add(url);
+      }
     }
 
     await _client
         .from('comments')
-        .update({'content': content, 'image_url': imageUrl})
+        .update({'content': content, 'image_urls': imageUrls})
         .eq('id', commentId);
   }
 

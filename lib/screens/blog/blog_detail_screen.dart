@@ -3,6 +3,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/blog.dart';
 import '../../../services/blog_service.dart';
 import '../../../utils/date_utils.dart';
+import '../../../widgets/gradient_background.dart';
+import '../../../widgets/image_carousel.dart';
 import 'blog_form_screen.dart';
 import '../comment/comment_section.dart';
 
@@ -35,7 +37,6 @@ class _BlogDetailScreenState extends State<BlogDetailScreen> {
 
   String get _currentUserId =>
       Supabase.instance.client.auth.currentUser?.id ?? '';
-
   bool get _isAuthor => _blog.authorId == _currentUserId;
 
   Future<void> _delete() async {
@@ -118,98 +119,89 @@ class _BlogDetailScreenState extends State<BlogDetailScreen> {
           ],
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Cover image
-            if (_blog.imageUrl != null)
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: Image.network(
-                  _blog.imageUrl!,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, _) => Container(
-                    height: 200,
-                    color: theme.colorScheme.surfaceContainerHighest,
+      body: GradientBackground(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Image carousel
+              if (_blog.imageUrls.isNotEmpty)
+                ImageCarousel(
+                  imageUrls: _blog.imageUrls,
+                  height: 250,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              if (_blog.imageUrls.isNotEmpty) const SizedBox(height: 20),
+
+              // Title
+              Text(
+                _blog.title,
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Author row
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 18,
+                    backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                    backgroundImage: _blog.authorAvatar != null
+                        ? NetworkImage(_blog.authorAvatar!)
+                        : null,
+                    child: _blog.authorAvatar == null
+                        ? Text((_blog.authorName ?? '?')[0].toUpperCase())
+                        : null,
                   ),
-                ),
-              ),
-            if (_blog.imageUrl != null) const SizedBox(height: 20),
-
-            // Title
-            Text(
-              _blog.title,
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Author row
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 18,
-                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                  backgroundImage: _blog.authorAvatar != null
-                      ? NetworkImage(_blog.authorAvatar!)
-                      : null,
-                  child: _blog.authorAvatar == null
-                      ? Text((_blog.authorName ?? '?')[0].toUpperCase())
-                      : null,
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _blog.authorName ?? 'Unknown',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _blog.authorName ?? 'Unknown',
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
-                      Text(
-                        formatDateTime(_blog.createdAt),
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: Colors.grey,
+                        Text(
+                          formatDateTime(_blog.createdAt),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: Colors.grey,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 20),
-            const Divider(),
-            const SizedBox(height: 16),
-
-            // Content
-            Text(
-              _blog.content,
-              style: theme.textTheme.bodyLarge?.copyWith(height: 1.7),
-            ),
-
-            const SizedBox(height: 32),
-            const Divider(),
-            const SizedBox(height: 8),
-
-            // Comments header
-            Text(
-              'Comments',
-              style: theme.textTheme.titleLarge?.copyWith(
-                fontWeight: FontWeight.bold,
+                ],
               ),
-            ),
-            const SizedBox(height: 16),
+              const SizedBox(height: 20),
+              const Divider(),
+              const SizedBox(height: 16),
 
-            // Comments - rendered inline, no inner scroll
-            CommentSection(blogId: _blog.id),
-          ],
+              // Content
+              Text(
+                _blog.content,
+                style: theme.textTheme.bodyLarge?.copyWith(height: 1.7),
+              ),
+              const SizedBox(height: 32),
+              const Divider(),
+              const SizedBox(height: 8),
+
+              // Comments
+              Text(
+                'Comments',
+                style: theme.textTheme.titleLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 16),
+              CommentSection(blogId: _blog.id),
+            ],
+          ),
         ),
       ),
     );

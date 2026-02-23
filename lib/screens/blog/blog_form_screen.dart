@@ -1,13 +1,12 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../models/blog.dart';
 import '../../../services/blog_service.dart';
 import '../../../widgets/gradient_background.dart';
 
 class BlogFormScreen extends StatefulWidget {
-  final Blog? blog; // null = create, non-null = edit
+  final Blog? blog;
   const BlogFormScreen({super.key, this.blog});
 
   @override
@@ -19,8 +18,8 @@ class _BlogFormScreenState extends State<BlogFormScreen> {
   final _contentCtrl = TextEditingController();
   final _service = BlogService();
   bool _saving = false;
-  Uint8List? _imageBytes;
-  String? _existingImageUrl;
+  List<Uint8List> _newImages = [];
+  List<String> _existingImageUrls = [];
 
   bool get _isEditing => widget.blog != null;
 
@@ -30,27 +29,28 @@ class _BlogFormScreenState extends State<BlogFormScreen> {
     if (_isEditing) {
       _titleCtrl.text = widget.blog!.title;
       _contentCtrl.text = widget.blog!.content;
-      _existingImageUrl = widget.blog!.imageUrl;
+      _existingImageUrls = List.from(widget.blog!.imageUrls);
     }
   }
 
-  Future<void> _pickImage() async {
-    final img = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 80,
-    );
-    if (img == null) return;
-    final bytes = await img.readAsBytes();
-    setState(() {
-      _imageBytes = bytes;
-      _existingImageUrl = null;
-    });
+  Future<void> _pickImages() async {
+    final imgs = await ImagePicker().pickMultiImage(imageQuality: 80);
+    if (imgs.isEmpty) return;
+
+    final bytes = <Uint8List>[];
+    for (var img in imgs) {
+      bytes.add(await img.readAsBytes());
+    }
+    setState(() => _newImages.addAll(bytes));
   }
 
-  void _removeImage() => setState(() {
-    _imageBytes = null;
-    _existingImageUrl = null;
-  });
+  void _removeNewImage(int index) {
+    setState(() => _newImages.removeAt(index));
+  }
+
+  void _removeExistingImage(int index) {
+    setState(() => _existingImageUrls.removeAt(index));
+  }
 
   Future<void> _submit() async {
     final title = _titleCtrl.text.trim();
@@ -71,15 +71,15 @@ class _BlogFormScreenState extends State<BlogFormScreen> {
           blogId: widget.blog!.id,
           title: title,
           content: content,
-          newImageBytes: _imageBytes,
-          existingImageUrl: _existingImageUrl,
+          newImagesBytes: _newImages.isNotEmpty ? _newImages : null,
+          existingImageUrls: _existingImageUrls,
         );
         _showSnack('Post updated!');
       } else {
         await _service.createBlog(
           title: title,
           content: content,
-          imageBytes: _imageBytes,
+          imagesBytes: _newImages.isNotEmpty ? _newImages : null,
         );
         _showSnack('Post published!');
       }
@@ -104,7 +104,7 @@ class _BlogFormScreenState extends State<BlogFormScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final hasImage = _imageBytes != null || _existingImageUrl != null;
+    final hasImages = _newImages.isNotEmpty || _existingImageUrls.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -134,85 +134,58 @@ class _BlogFormScreenState extends State<BlogFormScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Cover image
-              if (hasImage)
-                Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: _imageBytes != null
-                          ? Image.memory(
-                              _imageBytes!,
-                              height: 200,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                            )
-                          : Image.network(
-                              _existingImageUrl!,
-                              height: 200,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
+              // Image grid
+              if (hasImages)
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.surfaceContainerHighest
+                        .withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Images (${_existingImageUrls.length + _newImages.length})',
+                        style: theme.textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          ..._existingImageUrls.asMap().entries.map(
+                            (e) => _ImageTile(
+                              isNetwork: true,
+                              imageUrl: e.value,
+                              onRemove: () => _removeExistingImage(e.key),
                             ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: CircleAvatar(
-                        backgroundColor: Colors.black54,
-                        child: IconButton(
-                          icon: const Icon(
-                            Icons.close,
-                            color: Colors.white,
-                            size: 18,
                           ),
-                          onPressed: _removeImage,
-                        ),
-                      ),
-                    ),
-                  ],
-                )
-              else
-                GestureDetector(
-                  onTap: _pickImage,
-                  child: Container(
-                    height: 160,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: theme.colorScheme.outline.withOpacity(0.3),
-                        style: BorderStyle.solid,
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.add_photo_alternate_outlined,
-                          size: 48,
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Add cover image (optional)',
-                          style: TextStyle(
-                            color: theme.colorScheme.onSurfaceVariant,
+                          ..._newImages.asMap().entries.map(
+                            (e) => _ImageTile(
+                              isNetwork: false,
+                              imageBytes: e.value,
+                              onRemove: () => _removeNewImage(e.key),
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-              if (hasImage)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: TextButton.icon(
-                    onPressed: _pickImage,
-                    icon: const Icon(Icons.swap_horiz),
-                    label: const Text('Change image'),
-                  ),
-                ),
+
+              if (hasImages) const SizedBox(height: 12),
+
+              // Add images button
+              OutlinedButton.icon(
+                onPressed: _pickImages,
+                icon: const Icon(Icons.add_photo_alternate_outlined),
+                label: Text(hasImages ? 'Add more images' : 'Add images'),
+              ),
               const SizedBox(height: 20),
+
+              // Title
               TextField(
                 controller: _titleCtrl,
                 style: theme.textTheme.headlineSmall?.copyWith(
@@ -228,6 +201,8 @@ class _BlogFormScreenState extends State<BlogFormScreen> {
               ),
               const Divider(),
               const SizedBox(height: 8),
+
+              // Content
               TextField(
                 controller: _contentCtrl,
                 style: theme.textTheme.bodyLarge,
@@ -244,6 +219,56 @@ class _BlogFormScreenState extends State<BlogFormScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _ImageTile extends StatelessWidget {
+  final bool isNetwork;
+  final String? imageUrl;
+  final Uint8List? imageBytes;
+  final VoidCallback onRemove;
+
+  const _ImageTile({
+    required this.isNetwork,
+    this.imageUrl,
+    this.imageBytes,
+    required this.onRemove,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: isNetwork
+              ? Image.network(
+                  imageUrl!,
+                  width: 100,
+                  height: 100,
+                  fit: BoxFit.cover,
+                )
+              : Image.memory(
+                  imageBytes!,
+                  width: 100,
+                  height: 100,
+                  fit: BoxFit.cover,
+                ),
+        ),
+        Positioned(
+          top: 4,
+          right: 4,
+          child: GestureDetector(
+            onTap: onRemove,
+            child: CircleAvatar(
+              radius: 12,
+              backgroundColor: Colors.black54,
+              child: const Icon(Icons.close, size: 14, color: Colors.white),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

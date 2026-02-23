@@ -28,44 +28,51 @@ class BlogService {
     return Blog.fromMap(response);
   }
 
-  /// CREATE
+  /// CREATE with multiple images
   Future<void> createBlog({
     required String title,
     required String content,
-    Uint8List? imageBytes,
+    List<Uint8List>? imagesBytes, // Changed to list
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) throw Exception('Not authenticated');
 
-    String? imageUrl;
-    if (imageBytes != null) {
-      imageUrl = await _uploadImage(imageBytes, 'blog-images');
+    List<String> imageUrls = [];
+    if (imagesBytes != null && imagesBytes.isNotEmpty) {
+      for (var imageBytes in imagesBytes) {
+        final url = await _uploadImage(imageBytes, 'blog-images');
+        imageUrls.add(url);
+      }
     }
 
     await _client.from('blogs').insert({
       'title': title,
       'content': content,
       'author_id': user.id,
-      'image_url': imageUrl,
+      'image_urls': imageUrls,
     });
   }
 
-  /// UPDATE
+  /// UPDATE with multiple images
   Future<void> updateBlog({
     required String blogId,
     required String title,
     required String content,
-    Uint8List? newImageBytes,
-    String? existingImageUrl,
+    List<Uint8List>? newImagesBytes,
+    List<String>? existingImageUrls,
   }) async {
-    String? imageUrl = existingImageUrl;
-    if (newImageBytes != null) {
-      imageUrl = await _uploadImage(newImageBytes, 'blog-images');
+    List<String> imageUrls = existingImageUrls ?? [];
+
+    if (newImagesBytes != null && newImagesBytes.isNotEmpty) {
+      for (var imageBytes in newImagesBytes) {
+        final url = await _uploadImage(imageBytes, 'blog-images');
+        imageUrls.add(url);
+      }
     }
 
     await _client
         .from('blogs')
-        .update({'title': title, 'content': content, 'image_url': imageUrl})
+        .update({'title': title, 'content': content, 'image_urls': imageUrls})
         .eq('id', blogId);
   }
 
