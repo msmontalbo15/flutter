@@ -217,16 +217,39 @@ class _CommentSectionState extends State<CommentSection> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Expanded(
-                      child: TextField(
-                        controller: _textCtrl,
-                        maxLines: 3,
-                        minLines: 1,
-                        decoration: const InputDecoration(
-                          hintText: 'Write a comment...',
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                        ),
-                      ),
+                      child: Builder(builder: (context) {
+                        final cs = Theme.of(context).colorScheme;
+                        return TextField(
+                          controller: _textCtrl,
+                          maxLines: 3,
+                          minLines: 1,
+                          decoration: InputDecoration(
+                            hintText: 'Write a comment...',
+                            hintStyle: TextStyle(
+                              color: cs.onSurfaceVariant.withOpacity(0.5),
+                            ),
+                            filled: true,
+                            fillColor: cs.surfaceContainerLow,
+                            isDense: true,
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: cs.outline.withOpacity(0.4),
+                                width: 1.5,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide:
+                                  BorderSide(color: cs.primary, width: 2),
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                          ),
+                        );
+                      }),
                     ),
                     const SizedBox(width: 8),
                     Column(
@@ -557,16 +580,38 @@ class _EditCommentSheetState extends State<_EditCommentSheet> {
             const SizedBox(height: 12),
 
             // Text field
-            TextField(
-              controller: _ctrl,
-              maxLines: 4,
-              minLines: 2,
-              autofocus: true,
-              decoration: const InputDecoration(
-                hintText: 'Edit your comment...',
-                border: OutlineInputBorder(),
-              ),
-            ),
+            Builder(builder: (context) {
+              final cs = Theme.of(context).colorScheme;
+              return TextField(
+                controller: _ctrl,
+                maxLines: 4,
+                minLines: 2,
+                autofocus: true,
+                decoration: InputDecoration(
+                  hintText: 'Edit your comment...',
+                  hintStyle: TextStyle(
+                    color: cs.onSurfaceVariant.withOpacity(0.5),
+                  ),
+                  filled: true,
+                  fillColor: cs.surfaceContainerLow,
+                  enabledBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(
+                      color: cs.outline.withOpacity(0.4),
+                      width: 1.5,
+                    ),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide(color: cs.primary, width: 2),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 14,
+                  ),
+                ),
+              );
+            }),
             const SizedBox(height: 16),
 
             // Save button

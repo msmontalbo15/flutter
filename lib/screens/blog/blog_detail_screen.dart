@@ -183,9 +183,21 @@ class _BlogDetailScreenState extends State<BlogDetailScreen> {
               const SizedBox(height: 16),
 
               // Content
-              Text(
-                _blog.content,
-                style: theme.textTheme.bodyLarge?.copyWith(height: 1.7),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerLow,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: theme.colorScheme.outline.withOpacity(0.4),
+                    width: 1.5,
+                  ),
+                ),
+                child: Text(
+                  _blog.content,
+                  style: theme.textTheme.bodyLarge?.copyWith(height: 1.7),
+                ),
               ),
               const SizedBox(height: 32),
               const Divider(),

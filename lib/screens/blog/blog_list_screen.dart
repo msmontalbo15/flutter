@@ -9,6 +9,7 @@ import '../../../widgets/image_carousel.dart';
 import 'blog_detail_screen.dart';
 import 'blog_form_screen.dart';
 import '../profile/profile_screen.dart';
+import '../../../widgets/notification_bell.dart';
 
 class BlogListScreen extends StatefulWidget {
   const BlogListScreen({super.key});
@@ -24,6 +25,7 @@ class _BlogListScreenState extends State<BlogListScreen> {
   Profile? _profile;
   int _currentPage = 0;
   int _totalPages = 1;
+  int _totalCount = 0;
   bool _loading = false;
 
   @override
@@ -44,24 +46,19 @@ class _BlogListScreenState extends State<BlogListScreen> {
     if (_loading) return;
     setState(() => _loading = true);
     try {
-      final data = await _service.fetchBlogs(page);
+      final result = await _service.fetchBlogs(page);
       setState(() {
-        _blogs = data;
+        _blogs = result.blogs;
+        _totalCount = result.totalCount;
         _currentPage = page;
-        // If we got a full page, there might be more
-        if (data.length >= BlogService.limit) {
-          _totalPages = page + 2; // at least one more page
-        } else {
-          _totalPages = page + 1; // this is the last page
-        }
+        _totalPages = (result.totalCount / BlogService.limit).ceil().clamp(1, double.infinity).toInt();
         _loading = false;
       });
     } catch (e) {
       setState(() => _loading = false);
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -77,6 +74,7 @@ class _BlogListScreenState extends State<BlogListScreen> {
           child: Image.asset('assets/images/logo.webp', height: 36),
         ),
         actions: [
+          const NotificationBell(),
           InkWell(
             borderRadius: BorderRadius.circular(24),
             onTap: () async {
@@ -143,99 +141,56 @@ class _BlogListScreenState extends State<BlogListScreen> {
                 child: _loading
                     ? const Center(child: CircularProgressIndicator())
                     : _blogs.isEmpty
-                    ? const Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.article_outlined,
-                              size: 64,
-                              color: Colors.grey,
-                            ),
-                            SizedBox(height: 16),
-                            Text(
-                              'No posts yet',
-                              style: TextStyle(
-                                color: Colors.grey,
-                                fontSize: 16,
-                              ),
-                            ),
-                            SizedBox(height: 8),
-                            Text(
-                              'Be the first to write something!',
-                              style: TextStyle(color: Colors.grey),
-                            ),
-                          ],
-                        ),
-                      )
-                    : ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        itemCount: _blogs.length,
-                        itemBuilder: (context, i) {
-                          final blog = _blogs[i];
-                          return _BlogCard(
-                            blog: blog,
-                            onTap: () async {
-                              await Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => BlogDetailScreen(blog: blog),
+                        ? const Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.article_outlined,
+                                    size: 64, color: Colors.grey),
+                                SizedBox(height: 16),
+                                Text(
+                                  'No posts yet',
+                                  style: TextStyle(
+                                      color: Colors.grey, fontSize: 16),
                                 ),
+                                SizedBox(height: 8),
+                                Text(
+                                  'Be the first to write something!',
+                                  style: TextStyle(color: Colors.grey),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            itemCount: _blogs.length,
+                            itemBuilder: (context, i) {
+                              final blog = _blogs[i];
+                              return _BlogCard(
+                                blog: blog,
+                                onTap: () async {
+                                  await Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          BlogDetailScreen(blog: blog),
+                                    ),
+                                  );
+                                  _loadPage(_currentPage);
+                                },
                               );
-                              _loadPage(_currentPage);
                             },
-                          );
-                        },
-                      ),
+                          ),
               ),
 
-              // Pagination bar
+              // Modern Pagination Bar
               if (!_loading && _blogs.isNotEmpty)
-                Container(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.surface.withOpacity(0.9),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
-                        blurRadius: 8,
-                        offset: const Offset(0, -2),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Previous button
-                      IconButton(
-                        icon: const Icon(Icons.chevron_left),
-                        onPressed: _currentPage > 0
-                            ? () => _loadPage(_currentPage - 1)
-                            : null,
-                        style: IconButton.styleFrom(
-                          foregroundColor: _currentPage > 0
-                              ? theme.colorScheme.primary
-                              : Colors.grey,
-                        ),
-                      ),
-
-                      // Page number buttons
-                      ..._buildPageButtons(theme),
-
-                      // Next button
-                      IconButton(
-                        icon: const Icon(Icons.chevron_right),
-                        onPressed: _currentPage < _totalPages - 1
-                            ? () => _loadPage(_currentPage + 1)
-                            : null,
-                        style: IconButton.styleFrom(
-                          foregroundColor: _currentPage < _totalPages - 1
-                              ? theme.colorScheme.primary
-                              : Colors.grey,
-                        ),
-                      ),
-                    ],
-                  ),
+                _ModernPagination(
+                  currentPage: _currentPage,
+                  totalPages: _totalPages,
+                  totalCount: _totalCount,
+                  limit: BlogService.limit,
+                  onPageChanged: _loadPage,
                 ),
 
               const SizedBox(height: 80), // FAB clearance
@@ -245,118 +200,241 @@ class _BlogListScreenState extends State<BlogListScreen> {
       ),
     );
   }
+}
 
-  List<Widget> _buildPageButtons(ThemeData theme) {
-    final buttons = <Widget>[];
-    final start = (_currentPage - 2).clamp(
-      0,
-      (_totalPages - 5).clamp(0, _totalPages),
+// ─────────────────────────────────────────────
+// Modern Pagination Widget
+// ─────────────────────────────────────────────
+
+class _ModernPagination extends StatelessWidget {
+  final int currentPage;
+  final int totalPages;
+  final int totalCount;
+  final int limit;
+  final void Function(int) onPageChanged;
+
+  const _ModernPagination({
+    required this.currentPage,
+    required this.totalPages,
+    required this.totalCount,
+    required this.limit,
+    required this.onPageChanged,
+  });
+
+  List<_PageItem> _buildPageItems() {
+    final items = <_PageItem>[];
+
+    if (totalPages <= 7) {
+      for (int i = 0; i < totalPages; i++) {
+        items.add(_PageItem.page(i));
+      }
+      return items;
+    }
+
+    // Always show first
+    items.add(_PageItem.page(0));
+
+    final showLeftDots = currentPage > 3;
+    final showRightDots = currentPage < totalPages - 4;
+
+    if (showLeftDots) {
+      items.add(_PageItem.dots());
+    }
+
+    // Pages around current
+    final start = showLeftDots ? (currentPage - 1).clamp(1, totalPages - 2) : 1;
+    final end = showRightDots
+        ? (currentPage + 1).clamp(1, totalPages - 2)
+        : totalPages - 2;
+
+    for (int i = start; i <= end; i++) {
+      items.add(_PageItem.page(i));
+    }
+
+    if (showRightDots) {
+      items.add(_PageItem.dots());
+    }
+
+    // Always show last
+    items.add(_PageItem.page(totalPages - 1));
+
+    return items;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    final startEntry = currentPage * limit + 1;
+    final endEntry = ((currentPage + 1) * limit).clamp(0, totalCount);
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+      decoration: BoxDecoration(
+        color: colorScheme.surface,
+        border: Border(
+          top: BorderSide(
+            color: colorScheme.outlineVariant.withOpacity(0.5),
+            width: 1,
+          ),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 12,
+            offset: const Offset(0, -3),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Showing X–Y of Z label
+          Text(
+            'Showing $startEntry–$endEntry of $totalCount posts',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Pagination row
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // ← Prev button
+              _NavButton(
+                icon: Icons.arrow_back_ios_new_rounded,
+                enabled: currentPage > 0,
+                onTap: () => onPageChanged(currentPage - 1),
+                colorScheme: colorScheme,
+              ),
+              const SizedBox(width: 6),
+
+              // Page number pills
+              ..._buildPageItems().map((item) {
+                if (item.isDots) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Text(
+                      '···',
+                      style: TextStyle(
+                        color: colorScheme.onSurfaceVariant,
+                        fontSize: 14,
+                        letterSpacing: 1,
+                      ),
+                    ),
+                  );
+                }
+                final page = item.page!;
+                final isActive = page == currentPage;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeInOut,
+                    child: Material(
+                      color: isActive
+                          ? colorScheme.primary
+                          : colorScheme.surfaceContainerLow,
+                      borderRadius: BorderRadius.circular(10),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: isActive ? null : () => onPageChanged(page),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          width: isActive ? 42 : 36,
+                          height: 36,
+                          alignment: Alignment.center,
+                          child: Text(
+                            '${page + 1}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: isActive
+                                  ? FontWeight.w700
+                                  : FontWeight.w500,
+                              color: isActive
+                                  ? colorScheme.onPrimary
+                                  : colorScheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+
+              const SizedBox(width: 6),
+
+              // → Next button
+              _NavButton(
+                icon: Icons.arrow_forward_ios_rounded,
+                enabled: currentPage < totalPages - 1,
+                onTap: () => onPageChanged(currentPage + 1),
+                colorScheme: colorScheme,
+              ),
+            ],
+          ),
+        ],
+      ),
     );
-    final end = (start + 5).clamp(0, _totalPages);
-
-    // Show first page + ellipsis if needed
-    if (start > 0) {
-      buttons.add(
-        _PageButton(
-          page: 0,
-          current: _currentPage,
-          onTap: _loadPage,
-          theme: theme,
-        ),
-      );
-      if (start > 1) {
-        buttons.add(
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4),
-            child: Text('...', style: TextStyle(color: Colors.grey)),
-          ),
-        );
-      }
-    }
-
-    // Page range buttons
-    for (int i = start; i < end; i++) {
-      buttons.add(
-        _PageButton(
-          page: i,
-          current: _currentPage,
-          onTap: _loadPage,
-          theme: theme,
-        ),
-      );
-    }
-
-    // Show last page + ellipsis if needed
-    if (end < _totalPages) {
-      if (end < _totalPages - 1) {
-        buttons.add(
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 4),
-            child: Text('...', style: TextStyle(color: Colors.grey)),
-          ),
-        );
-      }
-      buttons.add(
-        _PageButton(
-          page: _totalPages - 1,
-          current: _currentPage,
-          onTap: _loadPage,
-          theme: theme,
-        ),
-      );
-    }
-
-    return buttons;
   }
 }
 
-class _PageButton extends StatelessWidget {
-  final int page;
-  final int current;
-  final void Function(int) onTap;
-  final ThemeData theme;
+class _PageItem {
+  final int? page;
+  final bool isDots;
 
-  const _PageButton({
-    required this.page,
-    required this.current,
+  const _PageItem._({this.page, this.isDots = false});
+
+  factory _PageItem.page(int p) => _PageItem._(page: p);
+  factory _PageItem.dots() => const _PageItem._(isDots: true);
+}
+
+class _NavButton extends StatelessWidget {
+  final IconData icon;
+  final bool enabled;
+  final VoidCallback onTap;
+  final ColorScheme colorScheme;
+
+  const _NavButton({
+    required this.icon,
+    required this.enabled,
     required this.onTap,
-    required this.theme,
+    required this.colorScheme,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isActive = page == current;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 3),
+    return Material(
+      color: enabled
+          ? colorScheme.primaryContainer
+          : colorScheme.surfaceContainerLow,
+      borderRadius: BorderRadius.circular(10),
       child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: isActive ? null : () => onTap(page),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
+        borderRadius: BorderRadius.circular(10),
+        onTap: enabled ? onTap : null,
+        child: SizedBox(
           width: 36,
           height: 36,
-          decoration: BoxDecoration(
-            color: isActive ? theme.colorScheme.primary : Colors.transparent,
-            borderRadius: BorderRadius.circular(8),
-            border: isActive
-                ? null
-                : Border.all(color: theme.colorScheme.outline.withOpacity(0.3)),
-          ),
-          child: Center(
-            child: Text(
-              '${page + 1}',
-              style: TextStyle(
-                fontWeight: isActive ? FontWeight.bold : FontWeight.normal,
-                color: isActive ? Colors.white : theme.colorScheme.onSurface,
-                fontSize: 14,
-              ),
-            ),
+          child: Icon(
+            icon,
+            size: 16,
+            color: enabled
+                ? colorScheme.onPrimaryContainer
+                : colorScheme.onSurfaceVariant.withOpacity(0.4),
           ),
         ),
       ),
     );
   }
 }
+
+// ─────────────────────────────────────────────
+// Blog Card
+// ─────────────────────────────────────────────
 
 class _BlogCard extends StatelessWidget {
   final Blog blog;
@@ -430,6 +508,34 @@ class _BlogCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
+                      // Comment count badge
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.chat_bubble_outline_rounded,
+                              size: 12,
+                              color: theme.colorScheme.onSecondaryContainer,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              '${blog.commentCount}',
+                              style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.onSecondaryContainer,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       Text(
                         formatDate(blog.createdAt),
                         style: theme.textTheme.bodySmall?.copyWith(

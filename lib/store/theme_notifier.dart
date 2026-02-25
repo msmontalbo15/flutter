@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class ThemeNotifier extends ValueNotifier<ThemeMode> {
-  ThemeNotifier() : super(ThemeMode.system);
+  ThemeNotifier() : super(ThemeMode.dark);
 
   void setLight() => value = ThemeMode.light;
   void setDark() => value = ThemeMode.dark;

@@ -44,11 +44,13 @@
 <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
-_flutter.loaderload()({
-  onEntrypointLoaded: async function(engineInitializer) {
-    let appRunner = await engineInitializer.initializeEngine({
-      hostElement: document.querySelector('#flutter_host')
+<script>
+  window.addEventListener('load', function () {
+    _flutter.loader.load({
+      onEntrypointLoaded: async function (engineInitializer) {
+        const appRunner = await engineInitializer.initializeEngine();
+        await appRunner.runApp();
+      }
     });
-    await appRunner.runApp();
-  }
-});
+  });
+</script>

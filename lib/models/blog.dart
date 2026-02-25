@@ -5,8 +5,9 @@ class Blog {
   final String authorId;
   final String? authorName;
   final String? authorAvatar;
-  final List<String> imageUrls; // Changed from single imageUrl to list
+  final List<String> imageUrls;
   final DateTime createdAt;
+  final int commentCount;
 
   Blog({
     required this.id,
@@ -17,10 +18,26 @@ class Blog {
     this.authorName,
     this.authorAvatar,
     List<String>? imageUrls,
+    this.commentCount = 0,
   }) : imageUrls = imageUrls ?? [];
 
   // For backward compatibility
   String? get imageUrl => imageUrls.isNotEmpty ? imageUrls.first : null;
+
+  /// Copy this blog with a specific comment count
+  factory Blog.withCommentCount(Blog blog, int count) {
+    return Blog(
+      id: blog.id,
+      title: blog.title,
+      content: blog.content,
+      authorId: blog.authorId,
+      createdAt: blog.createdAt,
+      authorName: blog.authorName,
+      authorAvatar: blog.authorAvatar,
+      imageUrls: blog.imageUrls,
+      commentCount: count,
+    );
+  }
 
   factory Blog.fromMap(Map<String, dynamic> map) {
     // Handle both old single image_url and new image_urls array
@@ -40,6 +57,7 @@ class Blog {
       authorAvatar: map['profiles']?['avatar_url'] ?? map['author_avatar'],
       imageUrls: images,
       createdAt: DateTime.parse(map['created_at']),
+      commentCount: (map['comment_count'] as int?) ?? 0,
     );
   }
 }

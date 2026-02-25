@@ -7,15 +7,41 @@ class BlogService {
   final _client = Supabase.instance.client;
   static const int limit = 5;
 
-  /// READ - paginated with author profile joined
-  Future<List<Blog>> fetchBlogs(int page) async {
+  /// READ - paginated with author profile joined, returns blogs + total count
+  Future<({List<Blog> blogs, int totalCount})> fetchBlogs(int page) async {
+    // 1. Fetch paginated blogs
     final response = await _client
         .from('blogs')
         .select('*, profiles(full_name, avatar_url)')
         .order('created_at', ascending: false)
-        .range(page * limit, (page + 1) * limit - 1);
+        .range(page * limit, (page + 1) * limit - 1)
+        .count(CountOption.exact);
 
-    return (response as List).map((map) => Blog.fromMap(map)).toList();
+    final blogs = (response.data as List).map((map) => Blog.fromMap(map)).toList();
+    final totalCount = (response.count ?? blogs.length) as int;
+
+    if (blogs.isEmpty) return (blogs: blogs, totalCount: totalCount);
+
+    // 2. Fetch comment counts for this page's blog IDs in one query
+    final blogIds = blogs.map((b) => b.id).toList();
+    final commentRows = await _client
+        .from('comments')
+        .select('blog_id')
+        .inFilter('blog_id', blogIds);
+
+    // 3. Tally counts per blog_id
+    final countMap = <String, int>{};
+    for (final row in commentRows as List) {
+      final id = row['blog_id'] as String;
+      countMap[id] = (countMap[id] ?? 0) + 1;
+    }
+
+    // 4. Rebuild blogs with comment counts attached
+    final blogsWithCounts = blogs
+        .map((b) => Blog.withCommentCount(b, countMap[b.id] ?? 0))
+        .toList();
+
+    return (blogs: blogsWithCounts, totalCount: totalCount);
   }
 
   /// READ single blog
@@ -32,7 +58,7 @@ class BlogService {
   Future<void> createBlog({
     required String title,
     required String content,
-    List<Uint8List>? imagesBytes, // Changed to list
+    List<Uint8List>? imagesBytes,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) throw Exception('Not authenticated');

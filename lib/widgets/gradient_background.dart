@@ -7,24 +7,29 @@ class GradientBackground extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: isDark
-              ? [
-                  const Color(0xFF1A0533),
-                  const Color(0xFF2D1B4E),
-                  const Color(0xFF1C1B1F),
-                ]
-              : [
-                  const Color(0xFF6750A4),
-                  const Color(0xFF9C7FD4),
-                  const Color(0xFFF3EEFF),
+        // Dark: radial-gradient(circle at top, #0f172a, #020617) — from the CSS
+        // Light: clean slate-white gradient
+        gradient: isDark
+            ? const RadialGradient(
+                center: Alignment(0.0, -1.0), // top center
+                radius: 1.6,
+                colors: [
+                  Color(0xFF172341), // slate-900
+                  Color(0xFF081552), // slate-950
                 ],
-          stops: const [0.0, 0.4, 1.0],
-        ),
+                stops: [0.0, 1.0],
+              )
+            : const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [
+                  Color(0xFF3B88D4), // slate-50
+                  Color(0xFF97ACF0), // indigo-50
+                ],
+              ),
       ),
       child: child,
     );

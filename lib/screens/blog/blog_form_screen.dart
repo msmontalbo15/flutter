@@ -36,7 +36,6 @@ class _BlogFormScreenState extends State<BlogFormScreen> {
   Future<void> _pickImages() async {
     final imgs = await ImagePicker().pickMultiImage(imageQuality: 80);
     if (imgs.isEmpty) return;
-
     final bytes = <Uint8List>[];
     for (var img in imgs) {
       bytes.add(await img.readAsBytes());
@@ -44,25 +43,15 @@ class _BlogFormScreenState extends State<BlogFormScreen> {
     setState(() => _newImages.addAll(bytes));
   }
 
-  void _removeNewImage(int index) {
-    setState(() => _newImages.removeAt(index));
-  }
-
-  void _removeExistingImage(int index) {
-    setState(() => _existingImageUrls.removeAt(index));
-  }
+  void _removeNewImage(int index) => setState(() => _newImages.removeAt(index));
+  void _removeExistingImage(int index) =>
+      setState(() => _existingImageUrls.removeAt(index));
 
   Future<void> _submit() async {
     final title = _titleCtrl.text.trim();
     final content = _contentCtrl.text.trim();
-    if (title.isEmpty) {
-      _showSnack('Title is required');
-      return;
-    }
-    if (content.isEmpty) {
-      _showSnack('Content is required');
-      return;
-    }
+    if (title.isEmpty) { _showSnack('Title is required'); return; }
+    if (content.isEmpty) { _showSnack('Content is required'); return; }
 
     setState(() => _saving = true);
     try {
@@ -104,7 +93,42 @@ class _BlogFormScreenState extends State<BlogFormScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
     final hasImages = _newImages.isNotEmpty || _existingImageUrls.isNotEmpty;
+
+    // Shared input decoration factory
+    InputDecoration _fieldDecoration({
+      required String label,
+      required String hint,
+      IconData? icon,
+    }) {
+      return InputDecoration(
+        labelText: label,
+        hintText: hint,
+        hintStyle: TextStyle(color: colorScheme.onSurfaceVariant.withOpacity(0.5)),
+        labelStyle: TextStyle(color: colorScheme.primary, fontWeight: FontWeight.w600),
+        prefixIcon: icon != null ? Icon(icon, color: colorScheme.primary) : null,
+        filled: true,
+        fillColor: colorScheme.surfaceContainerLow,
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: colorScheme.outline.withOpacity(0.4), width: 1.5),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: colorScheme.primary, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: colorScheme.error, width: 1.5),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: colorScheme.error, width: 2),
+        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -119,9 +143,7 @@ class _BlogFormScreenState extends State<BlogFormScreen> {
                       height: 16,
                       width: 16,
                       child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
+                          strokeWidth: 2, color: Colors.white),
                     )
                   : Text(_isEditing ? 'Update' : 'Publish'),
             ),
@@ -134,23 +156,36 @@ class _BlogFormScreenState extends State<BlogFormScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Image grid
-              if (hasImages)
+              // ── Image preview grid ──────────────────────────
+              if (hasImages) ...[
                 Container(
-                  padding: const EdgeInsets.all(8),
+                  padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.surfaceContainerHighest
-                        .withOpacity(0.5),
+                    color: colorScheme.surfaceContainerLow,
                     borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: colorScheme.outline.withOpacity(0.4),
+                      width: 1.5,
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Images (${_existingImageUrls.length + _newImages.length})',
-                        style: theme.textTheme.labelLarge,
+                      Row(
+                        children: [
+                          Icon(Icons.photo_library_outlined,
+                              size: 16, color: colorScheme.primary),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Images (${_existingImageUrls.length + _newImages.length})',
+                            style: theme.textTheme.labelLarge?.copyWith(
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       Wrap(
                         spacing: 8,
                         runSpacing: 8,
@@ -174,47 +209,61 @@ class _BlogFormScreenState extends State<BlogFormScreen> {
                     ],
                   ),
                 ),
+                const SizedBox(height: 12),
+              ],
 
-              if (hasImages) const SizedBox(height: 12),
-
-              // Add images button
-              OutlinedButton.icon(
+              // ── Add images button ───────────────────────────
+              FilledButton.tonalIcon(
                 onPressed: _pickImages,
                 icon: const Icon(Icons.add_photo_alternate_outlined),
                 label: Text(hasImages ? 'Add more images' : 'Add images'),
+                style: FilledButton.styleFrom(
+                  minimumSize: const Size(double.infinity, 48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
               const SizedBox(height: 20),
 
-              // Title
+              // ── Title field ─────────────────────────────────
               TextField(
                 controller: _titleCtrl,
-                style: theme.textTheme.headlineSmall?.copyWith(
+                style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
                 ),
                 maxLines: 2,
-                decoration: const InputDecoration(
-                  hintText: 'Post title...',
-                  border: InputBorder.none,
-                  hintStyle: TextStyle(color: Colors.grey),
-                ),
                 textCapitalization: TextCapitalization.sentences,
+                decoration: _fieldDecoration(
+                  label: 'Post Title',
+                  hint: 'Enter a compelling title...',
+                  icon: Icons.title_rounded,
+                ),
               ),
-              const Divider(),
-              const SizedBox(height: 8),
+              const SizedBox(height: 16),
 
-              // Content
+              // ── Content field ───────────────────────────────
               TextField(
                 controller: _contentCtrl,
-                style: theme.textTheme.bodyLarge,
+                style: theme.textTheme.bodyLarge?.copyWith(height: 1.6),
                 maxLines: null,
                 minLines: 12,
-                decoration: const InputDecoration(
-                  hintText: 'Write your story...',
-                  border: InputBorder.none,
-                  hintStyle: TextStyle(color: Colors.grey),
-                ),
                 textCapitalization: TextCapitalization.sentences,
+                decoration: _fieldDecoration(
+                  label: 'Content',
+                  hint: 'Write your story here...',
+                  icon: Icons.edit_note_rounded,
+                ).copyWith(
+                  // For multiline, align prefix icon to top
+                  prefixIconConstraints: const BoxConstraints(
+                    minWidth: 48,
+                    minHeight: 48,
+                  ),
+                  contentPadding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                ),
               ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -243,28 +292,20 @@ class _ImageTile extends StatelessWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(8),
           child: isNetwork
-              ? Image.network(
-                  imageUrl!,
-                  width: 100,
-                  height: 100,
-                  fit: BoxFit.cover,
-                )
-              : Image.memory(
-                  imageBytes!,
-                  width: 100,
-                  height: 100,
-                  fit: BoxFit.cover,
-                ),
+              ? Image.network(imageUrl!,
+                  width: 100, height: 100, fit: BoxFit.cover)
+              : Image.memory(imageBytes!,
+                  width: 100, height: 100, fit: BoxFit.cover),
         ),
         Positioned(
           top: 4,
           right: 4,
           child: GestureDetector(
             onTap: onRemove,
-            child: CircleAvatar(
+            child: const CircleAvatar(
               radius: 12,
               backgroundColor: Colors.black54,
-              child: const Icon(Icons.close, size: 14, color: Colors.white),
+              child: Icon(Icons.close, size: 14, color: Colors.white),
             ),
           ),
         ),
